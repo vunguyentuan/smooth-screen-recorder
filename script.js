@@ -128,6 +128,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Load default files
 function loadDefaultFiles() {
+    // Show loading state for default video
+    showVideoLoading(true);
+    
     // Load default video
     fetch('./windowcrop-EglPX.mov')
         .then(response => response.blob())
@@ -136,8 +139,12 @@ function loadDefaultFiles() {
             handleVideoFile(file);
         })
         .catch(error => {
+            showVideoLoading(false);
             console.log('Default video not found, user will need to load manually');
         });
+    
+    // Show loading state for default cursor data
+    showCursorLoading(true);
     
     // Load default cursor data
     fetch('./windowcrop-EglPX.input-events.json')
@@ -147,6 +154,7 @@ function loadDefaultFiles() {
             handleCursorFile(file);
         })
         .catch(error => {
+            showCursorLoading(false);
             console.log('Default cursor data not found, user will need to load manually');
         });
 }
