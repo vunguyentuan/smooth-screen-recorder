@@ -700,12 +700,15 @@
             const zoom = camera.zoom;
             const margin = cameraSettings.margin;
 
-            // 0.5 * 100 - 50 * 0.5
-            // 
-            const viewPortX = (camera.targetX/2 * canvas.width - canvas.width / 2)  * 1/zoom
-            const viewPortY = (camera.targetY/2 * canvas.height) * 1/zoom
-            const viewPortWidth = canvas.width * 1/zoom
-            const viewPortHeight = canvas.height * 1/zoom
+            // Calculate viewport dimensions in canvas pixels
+            const viewPortWidth = canvas.width / zoom;
+            const viewPortHeight = canvas.height / zoom;
+            
+            // Calculate viewport position based on camera position
+            // camera.x and camera.y are in normalized coordinates (0-1)
+            // We need to convert to canvas pixel coordinates
+            const viewPortX = camera.x * canvas.width - viewPortWidth / 2;
+            const viewPortY = camera.y * canvas.height - viewPortHeight / 2;
             
             // The viewport in screen space is always the full canvas when zoomed
             // Calculate safe zone in screen coordinates (pixels)
