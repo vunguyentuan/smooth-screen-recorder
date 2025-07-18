@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <title>Cursor Trail with Video Background</title>
+    <style>
+        .video-wrapper {
+            transform-origin: top left;
+            transition: transform 0.016s ease-out;
+        }
+        
+        #trailCanvas {
+            pointer-events: none;
+        }
+        
+        .dragover {
+            border-color: #10b981 !important;
+            background-color: #064e3b !important;
+        }
+        
+        .loaded {
+            border-color: #10b981 !important;
+            background-color: #022c22 !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans min-h-screen flex flex-col items-center p-6">    
+    <div class="relative border-2 border-gray-700 rounded-lg bg-gradient-to-r from-gray-400 to-gray-800 shadow-2xl overflow-hidden" id="canvasContainer">
+        <div class="video-wrapper relative shadow-lg rounded-2xl overflow-hidden" id="videoWrapper">
+            <video id="backgroundVideo" muted class="block max-w-full max-h-[70vh]"></video>
+            <canvas id="trailCanvas" class="absolute top-0 left-0 w-full h-full"></canvas>
+        </div>
+    </div>
+    
+    <div class="mt-6 space-y-6">
+        <!-- Playback Controls Section -->
+        <div class="bg-gray-800 p-4 rounded-lg">
+            <!-- Top row - Transport controls and zoom -->
+            <div class="flex items-center justify-between mb-4">
+                <!-- Left side - Transport controls -->
+                <div class="flex items-center gap-3">
+                    <button id="playPauseButton" disabled class="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white border-none px-4 py-2 rounded transition-colors duration-300 flex items-center gap-2">
+                        <svg id="playIcon" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z"/>
+                        </svg>
+                        <svg id="pauseIcon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                        </svg>
+                        <span id="playPauseText">Play</span>
+                    </button>
+                    <button id="resetButton" disabled class="bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white border-none px-4 py-2 rounded transition-colors duration-300 flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M4 12a8 8 0 0 1 8-8V2.5L16 6l-4 3.5V8a6 6 0 1 0 6 6h1.5c0 5.2-4.3 9.5-9.5 9.5S2.5 17.2 2.5 12 6.8 2.5 12 2.5v1.5z"/>
+                        </svg>
+                        Reset
+                    </button>
+                    <div class="text-gray-400 font-mono text-center" id="timeDisplay">00:00 / 00:00</div>
+                </div>
+                
+                <!-- Right side - Zoom controls -->
+                <div class="flex items-center gap-2">
+                    <button id="zoom0_5x" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors duration-300">0.8x</button>
+                    <button id="zoom1x" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors duration-300">1x</button>
+                    <button id="zoom1_5x" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors duration-300">1.5x</button>
+                    <button id="zoom2x" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors duration-300">2x</button>
+                </div>
+            </div>
+            
+            <!-- Timeline - Full width seek bar -->
+            <div class="mb-4">
+                <input type="range" id="seekSlider" min="0" max="100" value="0" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-600" disabled>
+            </div>
+            
+            <!-- Bottom row - Speed control -->
+            <div class="flex items-center justify-center">
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-400 text-sm">Speed:</span>
+                    <input type="range" id="speedSlider" min="0.25" max="3" step="0.25" value="1" class="w-32 accent-green-600">
+                    <span class="text-gray-400 text-sm min-w-[30px]">1x</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Cursor Controls Section -->
+        <div class="bg-gray-800 p-4 rounded-lg">
+            <div class="text-white mb-3 font-semibold">Cursor Controls</div>
+            <div class="flex flex-wrap gap-4 items-center justify-center">
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-400 text-sm min-w-[60px]">Opacity:</span>
+                    <input type="range" id="opacitySlider" min="0.1" max="1" step="0.1" value="0.8" class="w-24 accent-green-600">
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-400 text-sm min-w-[40px]">Size:</span>
+                    <input type="range" id="sizeSlider" min="2" max="100" step="10" value="20" class="w-24 accent-green-600">
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-400 text-sm min-w-[40px]">Trail:</span>
+                    <input type="range" id="trailSlider" min="0" max="100" step="5" value="20" class="w-24 accent-green-600">
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-400 text-sm min-w-[40px]">Fade:</span>
+                    <input type="range" id="fadeTimeSlider" min="0.1" max="3" step="0.1" value="1" class="w-24 accent-green-600">
+                    <span id="fadeTimeValue" class="text-gray-400 text-xs">1.0s</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-400 text-sm">Hide Still:</span>
+                    <input type="checkbox" id="hideCursorCheck" class="w-auto m-0">
+                </div>
+            </div>
+        </div>
+    </div>
+    
+        <!-- Camera Controls Section -->
+        <div class="bg-gray-800 p-4 rounded-lg hidden" id="cameraControls">
+            <div class="text-white mb-3 font-semibold">Camera Controls</div>
+            <div class="flex flex-wrap gap-4 justify-center">
+                <div class="bg-gray-700 p-3 rounded-lg flex flex-col items-center gap-1">
+                    <label class="text-gray-400 text-xs">Zoom Level</label>
+                    <input type="range" id="zoomSlider" min="0.5" max="3" step="0.1" value="0.5" class="w-32 accent-green-600">
+                    <span id="zoomValue" class="text-gray-400 text-xs mt-1">1.0x</span>
+                </div>
+                <div class="bg-gray-700 p-3 rounded-lg flex flex-col items-center gap-1">
+                    <label class="text-gray-400 text-xs">Margin Size</label>
+                    <input type="range" id="marginSlider" min="0.05" max="0.8" step="0.05" value="0.3" class="w-32 accent-green-600">
+                    <span id="marginValue" class="text-gray-400 text-xs mt-1">15%</span>
+                </div>
+                <div class="bg-gray-700 p-3 rounded-lg flex flex-col items-center gap-1">
+                    <label class="text-gray-400 text-xs">Camera Smoothing</label>
+                    <input type="range" id="smoothingSlider" min="0.02" max="0.2" step="0.01" value="0.08" class="w-32 accent-green-600">
+                    <span id="smoothingValue" class="text-gray-400 text-xs mt-1">0.08</span>
+                </div>
+                <div class="bg-gray-700 p-3 rounded-lg flex flex-col items-center gap-1">
+                    <label class="text-gray-400 text-xs">Follow Cursor</label>
+                    <input type="checkbox" id="followCursorCheck" checked class="w-auto m-0">
+                </div>
+                <div class="bg-gray-700 p-3 rounded-lg flex gap-2">
+                    <button id="resetCameraButton" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded transition-colors duration-300">Reset Camera</button>
+                    <button id="debugButton" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded transition-colors duration-300">Toggle Debug</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sync Controls Section -->
+        <div class="bg-gray-800 p-4 rounded-lg hidden" id="syncControls">
+            <div class="text-white mb-3 font-semibold">Synchronization Controls</div>
+            <div class="flex flex-wrap gap-4 justify-center">
+                <div class="bg-gray-700 p-3 rounded-lg flex flex-col items-center gap-1">
+                    <label class="text-gray-400 text-xs">Time Offset (seconds)</label>
+                    <input type="range" id="offsetSlider" min="-10" max="10" step="0.1" value="0" class="w-32 accent-green-600">
+                    <span id="offsetValue" class="text-gray-400 text-xs mt-1">0.0s</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- File Loading Section -->
+        <div class="bg-gray-800 p-4 rounded-lg">
+            <div class="text-white mb-3 font-semibold">File Loading</div>
+            <div class="flex flex-wrap gap-4 justify-center">
+                <div class="bg-gray-700 p-4 rounded-lg border-2 border-dashed border-gray-600 text-center hover:border-gray-500 hover:bg-gray-600 transition-all duration-300 min-w-[250px]" id="videoContainer">
+                    <input type="file" id="videoInput" accept="video/*" class="hidden" />
+                    <label for="videoInput" class="inline-block px-4 py-2 bg-green-600 text-white rounded cursor-pointer text-sm hover:bg-green-700 transition-colors duration-300">
+                        📹 Load Video
+                    </label>
+                    <div class="text-gray-400 mt-2 text-xs">
+                        <span id="videoStatus">windowcrop-EglPX.mov</span>
+                    </div>
+                    <div class="text-red-400 mt-2 p-2 bg-red-900/20 rounded text-xs hidden" id="videoError"></div>
+                    <div class="text-green-400 mt-2 text-xs hidden" id="videoLoading">Loading video...</div>
+                </div>
+                
+                <div class="bg-gray-700 p-4 rounded-lg border-2 border-dashed border-gray-600 text-center hover:border-gray-500 hover:bg-gray-600 transition-all duration-300 min-w-[250px]" id="cursorContainer">
+                    <input type="file" id="cursorInput" accept=".json,.txt" class="hidden" />
+                    <label for="cursorInput" class="inline-block px-4 py-2 bg-green-600 text-white rounded cursor-pointer text-sm hover:bg-green-700 transition-colors duration-300">
+                        🖱️ Load Cursor Data
+                    </label>
+                    <div class="text-gray-400 mt-2 text-xs">
+                        <span id="cursorStatus">windowcrop-EglPX.input-events.json</span>
+                    </div>
+                    <div class="text-red-400 mt-2 p-2 bg-red-900/20 rounded text-xs hidden" id="cursorError"></div>
+                    <div class="text-green-400 mt-2 text-xs hidden" id="cursorLoading">Processing cursor data...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bg-gray-900 text-gray-400 p-3 rounded mt-3 font-mono text-xs hidden" id="debugInfo"></div>
+    
+    <div class="text-gray-400 mt-4 text-center text-sm">
+        <span id="statusText">Load both video and cursor data files to begin</span>
+    </div>
+
+    <script src="./script.js"></script>
+</body>
+</html>

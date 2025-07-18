@@ -15,10 +15,10 @@ let hideCursorWhenStill = false;
 let camera = {
     x: 0.5,        // Camera position (0-1 normalized coordinates)
     y: 0.5,
-    zoom: 1,       // Current zoom level
+    zoom: 0.8,     // Current zoom level (default 0.8x)
     targetX: 0.5,  // Target position for smooth movement
     targetY: 0.5,
-    targetZoom: 1, // Target zoom for smooth zooming
+    targetZoom: 0.8, // Target zoom for smooth zooming (default 0.8x)
     smoothing: 0.08 // Camera smoothing factor
 };
 
@@ -51,8 +51,10 @@ const statusText = document.getElementById('statusText');
 const debugInfo = document.getElementById('debugInfo');
 
 // Controls
-const playButton = document.getElementById('playButton');
-const pauseButton = document.getElementById('pauseButton');
+const playPauseButton = document.getElementById('playPauseButton');
+const playIcon = document.getElementById('playIcon');
+const pauseIcon = document.getElementById('pauseIcon');
+const playPauseText = document.getElementById('playPauseText');
 const resetButton = document.getElementById('resetButton');
 const timeDisplay = document.getElementById('timeDisplay');
 const syncControls = document.getElementById('syncControls');
@@ -79,15 +81,23 @@ const followCursorCheck = document.getElementById('followCursorCheck');
 const resetCameraButton = document.getElementById('resetCameraButton');
 const debugButton = document.getElementById('debugButton');
 
+// New controls
+const seekSlider = document.getElementById('seekSlider');
+const zoom0_5xButton = document.getElementById('zoom0_5x');
+const zoom1xButton = document.getElementById('zoom1x');
+const zoom1_5xButton = document.getElementById('zoom1_5x');
+const zoom2xButton = document.getElementById('zoom2x');
+
 // Event listeners
 videoInput.addEventListener('change', handleVideoSelect);
 cursorInput.addEventListener('change', handleCursorSelect);
 
-playButton.addEventListener('click', startPlayback);
-pauseButton.addEventListener('click', pausePlayback);
+playPauseButton.addEventListener('click', togglePlayPause);
 resetButton.addEventListener('click', resetPlayback);
 
 speedSlider.addEventListener('input', updatePlaybackSpeed);
+// Initialize speed display
+updatePlaybackSpeed();
 offsetSlider.addEventListener('input', updateTimeOffset);
 fadeTimeSlider.addEventListener('input', updateFadeTime);
 hideCursorCheck.addEventListener('change', updateHideCursor);
@@ -100,8 +110,46 @@ followCursorCheck.addEventListener('change', updateFollowCursor);
 resetCameraButton.addEventListener('click', resetCamera);
 debugButton.addEventListener('click', toggleDebug);
 
+// New control listeners
+seekSlider.addEventListener('input', handleSeek);
+zoom0_5xButton.addEventListener('click', () => setZoomPreset(0.8));
+zoom1xButton.addEventListener('click', () => setZoomPreset(1));
+zoom1_5xButton.addEventListener('click', () => setZoomPreset(1.5));
+zoom2xButton.addEventListener('click', () => setZoomPreset(2));
+
 video.addEventListener('loadedmetadata', onVideoLoaded);
 video.addEventListener('ended', onVideoEnded);
+
+// Initialize default zoom preset and load default files
+document.addEventListener('DOMContentLoaded', () => {
+    setZoomPreset(0.8);
+    loadDefaultFiles();
+});
+
+// Load default files
+function loadDefaultFiles() {
+    // Load default video
+    fetch('./windowcrop-EglPX.mov')
+        .then(response => response.blob())
+        .then(blob => {
+            const file = new File([blob], 'windowcrop-EglPX.mov', { type: 'video/quicktime' });
+            handleVideoFile(file);
+        })
+        .catch(error => {
+            console.log('Default video not found, user will need to load manually');
+        });
+    
+    // Load default cursor data
+    fetch('./windowcrop-EglPX.input-events.json')
+        .then(response => response.text())
+        .then(text => {
+            const file = new File([text], 'windowcrop-EglPX.input-events.json', { type: 'application/json' });
+            handleCursorFile(file);
+        })
+        .catch(error => {
+            console.log('Default cursor data not found, user will need to load manually');
+        });
+}
 
 // Drag and drop for video
 setupDragDrop(videoContainer, handleVideoFile, 'video/*');
@@ -247,9 +295,9 @@ function checkReadyState() {
         syncControls.style.display = 'block';
         cameraControls.style.display = 'block';
         
-        playButton.disabled = false;
-        pauseButton.disabled = false;
+        playPauseButton.disabled = false;
         resetButton.disabled = false;
+        seekSlider.disabled = false;
         
         const videoDuration = video.duration;
         const cursorDuration = cursorEvents.length > 0 ? 
@@ -265,20 +313,48 @@ function checkReadyState() {
     }
 }
 
+function togglePlayPause() {
+    if (!videoLoaded || !cursorLoaded) return;
+    
+    if (isPlaying) {
+        pausePlayback();
+    } else {
+        startPlayback();
+    }
+}
+
 function startPlayback() {
     if (!videoLoaded || !cursorLoaded) return;
     
     isPlaying = true;
     video.play();
     startTime = performance.now();
+    updatePlayPauseButton();
     animate();
 }
 
 function pausePlayback() {
     isPlaying = false;
     video.pause();
+    updatePlayPauseButton();
     if (animationId) {
         cancelAnimationFrame(animationId);
+    }
+}
+
+function updatePlayPauseButton() {
+    if (isPlaying) {
+        playIcon.classList.add('hidden');
+        pauseIcon.classList.remove('hidden');
+        playPauseText.textContent = 'Pause';
+        playPauseButton.classList.remove('bg-green-600', 'hover:bg-green-700');
+        playPauseButton.classList.add('bg-yellow-600', 'hover:bg-yellow-700');
+    } else {
+        playIcon.classList.remove('hidden');
+        pauseIcon.classList.add('hidden');
+        playPauseText.textContent = 'Play';
+        playPauseButton.classList.remove('bg-yellow-600', 'hover:bg-yellow-700');
+        playPauseButton.classList.add('bg-green-600', 'hover:bg-green-700');
     }
 }
 
@@ -288,6 +364,8 @@ function resetPlayback() {
     currentCursorIndex = 0;
     clearCanvas();
     updateTimeDisplay();
+    updateSeekSlider();
+    updatePlayPauseButton();
 }
 
 function animate() {
@@ -298,6 +376,7 @@ function animate() {
     applyVideoTransform();
     drawCursorAtTime(currentVideoTime);
     updateTimeDisplay();
+    updateSeekSlider();
     updateDebugInfo();
     
     animationId = requestAnimationFrame(animate);
@@ -624,30 +703,19 @@ function applyVideoTransform() {
     videoWrapper.style.transformOrigin = `${originX}px ${originY}px`;
     videoWrapper.style.transform = `scale(${zoom})`;
     
-    // Logging for debugging
-    console.log('=== applyVideoTransform Debug ===');
-    console.log('Camera:', { x: camera.x, y: camera.y, zoom: camera.zoom });
-    console.log('Container:', { width: containerWidth, height: containerHeight });
-    console.log('Target (camera in pixels):', { x: targetX, y: targetY });
-    console.log('Center:', { x: centerX, y: centerY });
-    console.log('Transform Origin:', { x: originX, y: originY });
-    console.log('Transform:', `scale(${zoom})`);
-    console.log('Verification - target after scale:', {
-        x: originX + (targetX - originX) * zoom,
-        y: originY + (targetY - originY) * zoom
-    });
-    console.log('================================');
+    // Debug logging removed for cleaner output
 }
 
 function resetCamera() {
     camera.x = 0.5;
     camera.y = 0.5;
-    camera.zoom = 1;
+    camera.zoom = 0.8;
     camera.targetX = 0.5;
     camera.targetY = 0.5;
-    camera.targetZoom = 1;
-    zoomSlider.value = 1;
+    camera.targetZoom = 0.8;
+    zoomSlider.value = 0.8;
     updateZoomValue();
+    setZoomPreset(0.8); // This will update the button states
     applyVideoTransform();
 }
 
@@ -749,9 +817,56 @@ function updateTimeDisplay() {
     timeDisplay.textContent = `${formatTime(current)} / ${formatTime(duration)}`;
 }
 
+function updateSeekSlider() {
+    if (!video || !video.duration) return;
+    const progress = (video.currentTime / video.duration) * 100;
+    seekSlider.value = progress;
+}
+
+function handleSeek() {
+    if (!video || !video.duration) return;
+    const newTime = (seekSlider.value / 100) * video.duration;
+    video.currentTime = newTime;
+    currentCursorIndex = 0;
+    // Force update cursor index for new time
+    const targetTime = newTime + timeOffset;
+    updateCursorIndex(targetTime);
+    if (!isPlaying) {
+        drawCursorAtTime(newTime);
+    }
+}
+
+function setZoomPreset(zoomLevel) {
+    zoomSlider.value = zoomLevel;
+    updateZoom();
+    
+    // Update button states
+    const buttons = [zoom0_5xButton, zoom1xButton, zoom1_5xButton, zoom2xButton];
+    buttons.forEach(btn => btn.classList.remove('bg-green-600', 'hover:bg-green-700'));
+    buttons.forEach(btn => btn.classList.add('bg-blue-600', 'hover:bg-blue-700'));
+    
+    // Highlight active button
+    if (zoomLevel === 0.8) {
+        zoom0_5xButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+        zoom0_5xButton.classList.add('bg-green-600', 'hover:bg-green-700');
+    } else if (zoomLevel === 1) {
+        zoom1xButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+        zoom1xButton.classList.add('bg-green-600', 'hover:bg-green-700');
+    } else if (zoomLevel === 1.5) {
+        zoom1_5xButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+        zoom1_5xButton.classList.add('bg-green-600', 'hover:bg-green-700');
+    } else if (zoomLevel === 2) {
+        zoom2xButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+        zoom2xButton.classList.add('bg-green-600', 'hover:bg-green-700');
+    }
+}
+
 function updatePlaybackSpeed() {
     const speed = parseFloat(speedSlider.value);
     video.playbackRate = speed;
+    // Update speed display
+    const speedDisplay = speedSlider.nextElementSibling;
+    speedDisplay.textContent = `${speed}x`;
 }
 
 function updateTimeOffset() {
@@ -770,6 +885,7 @@ function updateHideCursor() {
 
 function onVideoEnded() {
     pausePlayback();
+    updatePlayPauseButton();
 }
 
 function showVideoError(message) {
