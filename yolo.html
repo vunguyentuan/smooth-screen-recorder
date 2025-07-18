@@ -310,7 +310,7 @@
             </div>
             <div class="control-group">
                 <label>Margin Size</label>
-                <input type="range" id="marginSlider" min="0.05" max="0.3" step="0.05" value="0.15">
+                <input type="range" id="marginSlider" min="0.05" max="0.8" step="0.05" value="0.3">
                 <span id="marginValue">15%</span>
             </div>
             <div class="control-group">
@@ -366,7 +366,7 @@
         };
         
         let cameraSettings = {
-            margin: 0.6,        // Margin from viewport edges where cursor should stay
+            margin: 0.4,        // Margin from viewport edges where cursor should stay
             followCursor: true   // Whether to follow the cursor
         };
         
@@ -890,24 +890,24 @@
             // Camera position (0, 0) should show top-left corner
             // Camera position (1, 1) should show bottom-right corner
             
-            // Calculate viewport dimensions in canvas pixels
-            const viewPortWidth = canvas.width / zoom;
-            const viewPortHeight = canvas.height / zoom;
+            // Calculate how much to offset the video based on camera position
+            // The viewport should always stay centered on screen
+            // We move the video content, not the viewport
             
-            // Calculate viewport position based on camera position
-            // This tells us which part of the canvas we're looking at
-            const viewPortX = camera.x * canvas.width - viewPortWidth / 2;
-            const viewPortY = camera.y * canvas.height - viewPortHeight / 2;
+            // When camera is at (0.5, 0.5), no translation needed
+            // When camera moves right, we pan video left (negative)
+            // When camera moves left, we pan video right (positive)
             
-            // Convert viewport position from canvas coordinates to video container coordinates
-            // We need to scale down by the ratio of video size to canvas size
+            // Convert camera position from normalized (0-1) to pixel offset from center
+            const centerOffsetX = (camera.x - 0.5) * canvas.width/2;
+            const centerOffsetY = (camera.y - 0.5) * canvas.height/2;
+            
+            // Scale the offset by the ratio of container to canvas size
             const scaleRatio = containerWidth / canvas.width;
             
-            // Calculate how much to pan the video to show the viewport area
-            // When viewPortX/Y is 0, we want no translation (showing top-left)
-            // As viewPortX/Y increases, we need to translate in the opposite direction
-            const panX = -viewPortX * scaleRatio * zoom;
-            const panY = -viewPortY * scaleRatio * zoom;
+            // Apply the offset in the opposite direction, scaled by zoom
+            const panX = -centerOffsetX * scaleRatio * zoom;
+            const panY = -centerOffsetY * scaleRatio * zoom;
             
             videoWrapper.style.transform = `scale(${zoom}) translate(${panX}px, ${panY}px)`;
         }
