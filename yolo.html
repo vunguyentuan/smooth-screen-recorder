@@ -366,7 +366,7 @@
         };
         
         let cameraSettings = {
-            margin: 0.3,        // Margin from viewport edges where cursor should stay
+            margin: 0.6,        // Margin from viewport edges where cursor should stay
             followCursor: true   // Whether to follow the cursor
         };
         
@@ -890,15 +890,24 @@
             // Camera position (0, 0) should show top-left corner
             // Camera position (1, 1) should show bottom-right corner
             
-            // When zoomed in, we need to pan the opposite direction of camera movement
-            // If camera moves right (x increases), we pan left (negative)
-            const maxPanX = (containerWidth * zoom - containerWidth) / 2;
-            const maxPanY = (containerHeight * zoom - containerHeight) / 2;
+            // Calculate viewport dimensions in canvas pixels
+            const viewPortWidth = canvas.width / zoom;
+            const viewPortHeight = canvas.height / zoom;
             
-            // Map camera position: (0.5, 0.5) -> (0, 0) pan
-            // (0, 0) -> (+maxPan, +maxPan), (1, 1) -> (-maxPan, -maxPan)
-            const panX = (0.5 - camera.x) * 2 * maxPanX;
-            const panY = (0.5 - camera.y) * 2 * maxPanY;
+            // Calculate viewport position based on camera position
+            // This tells us which part of the canvas we're looking at
+            const viewPortX = camera.x * canvas.width - viewPortWidth / 2;
+            const viewPortY = camera.y * canvas.height - viewPortHeight / 2;
+            
+            // Convert viewport position from canvas coordinates to video container coordinates
+            // We need to scale down by the ratio of video size to canvas size
+            const scaleRatio = containerWidth / canvas.width;
+            
+            // Calculate how much to pan the video to show the viewport area
+            // When viewPortX/Y is 0, we want no translation (showing top-left)
+            // As viewPortX/Y increases, we need to translate in the opposite direction
+            const panX = -viewPortX * scaleRatio * zoom;
+            const panY = -viewPortY * scaleRatio * zoom;
             
             videoWrapper.style.transform = `scale(${zoom}) translate(${panX}px, ${panY}px)`;
         }
