@@ -810,56 +810,59 @@
                 return;
             }
             
-            // Calculate the viewport size in normalized coordinates (0-1)
-            const viewportWidth = 1 / zoom;   // At 2x zoom, viewport is 0.5 wide
-            const viewportHeight = 1 / zoom;  // At 2x zoom, viewport is 0.5 tall
+            // Calculate viewport dimensions in canvas pixels (same logic as drawSafeZone)
+            const viewPortWidth = canvas.width / zoom;
+            const viewPortHeight = canvas.height / zoom;
             
-            // Calculate the safe area where cursor should stay (inside margin)
-            const marginWidth = viewportWidth * margin;
-            const marginHeight = viewportHeight * margin;
+            // Calculate viewport position based on camera position
+            // camera.x and camera.y are in normalized coordinates (0-1)
+            // We need to convert to canvas pixel coordinates
+            const viewPortX = camera.x * canvas.width - viewPortWidth / 2;
+            const viewPortY = camera.y * canvas.height - viewPortHeight / 2;
             
-            // Current viewport bounds (what we can actually see)
-            const viewLeft = camera.x - viewportWidth / 2;
-            const viewRight = camera.x + viewportWidth / 2;
-            const viewTop = camera.y - viewportHeight / 2;
-            const viewBottom = camera.y + viewportHeight / 2;
+            // Calculate safe zone in screen coordinates (pixels)
+            const marginPixelsX = viewPortWidth * margin;
+            const marginPixelsY = viewPortHeight * margin;
             
-            // Safe zone bounds (margin area inside viewport)
-            const safeLeft = viewLeft + marginWidth;
-            const safeRight = viewRight - marginWidth;
-            const safeTop = viewTop + marginHeight;
-            const safeBottom = viewBottom - marginHeight;
+            // Safe zone boundaries in canvas pixel coordinates
+            const safeLeft = viewPortX + (marginPixelsX/2);
+            const safeTop = viewPortY + (marginPixelsY/2);
+            const safeRight = viewPortX + viewPortWidth - (marginPixelsX/2);
+            const safeBottom = viewPortY + viewPortHeight - (marginPixelsY/2);
+            
+            // Convert cursor position to canvas pixel coordinates
+            const cursorPixelX = cursorX * canvas.width;
+            const cursorPixelY = cursorY * canvas.height;
             
             // Calculate new camera target to keep cursor in safe zone
             let newTargetX = camera.targetX;
             let newTargetY = camera.targetY;
             
             // Horizontal adjustment
-            if (cursorX < safeLeft) {
+            if (cursorPixelX < safeLeft) {
                 // Cursor is too far left, move camera left to bring it into safe zone
-                newTargetX = cursorX + marginWidth - viewportWidth / 2;
-            } else if (cursorX > safeRight) {
+                const offset = safeLeft - cursorPixelX;
+                newTargetX = camera.x - (offset / canvas.width);
+            } else if (cursorPixelX > safeRight) {
                 // Cursor is too far right, move camera right to bring it into safe zone
-                newTargetX = cursorX - marginWidth + viewportWidth / 2;
+                const offset = cursorPixelX - safeRight;
+                newTargetX = camera.x + (offset / canvas.width);
             }
             
             // Vertical adjustment
-            if (cursorY < safeTop) {
+            if (cursorPixelY < safeTop) {
                 // Cursor is too far up, move camera up to bring it into safe zone
-                newTargetY = cursorY + marginHeight - viewportHeight / 2;
-            } else if (cursorY > safeBottom) {
+                const offset = safeTop - cursorPixelY;
+                newTargetY = camera.y - (offset / canvas.height);
+            } else if (cursorPixelY > safeBottom) {
                 // Cursor is too far down, move camera down to bring it into safe zone
-                newTargetY = cursorY - marginHeight + viewportHeight / 2;
+                const offset = cursorPixelY - safeBottom;
+                newTargetY = camera.y + (offset / canvas.height);
             }
             
-            // Clamp camera position to prevent showing outside video bounds
-            const minCameraX = viewportWidth / 2;
-            const maxCameraX = 1 - viewportWidth / 2;
-            const minCameraY = viewportHeight / 2;
-            const maxCameraY = 1 - viewportHeight / 2;
-            
-            // camera.targetX = Math.max(minCameraX, Math.min(maxCameraX, newTargetX));
-            // camera.targetY = Math.max(minCameraY, Math.min(maxCameraY, newTargetY));
+            // Update camera target without clamping to ensure cursor stays in safe zone
+            camera.targetX = newTargetX;
+            camera.targetY = newTargetY;
         }
         
         function smoothCamera() {
@@ -897,7 +900,7 @@
             const panX = (0.5 - camera.x) * 2 * maxPanX;
             const panY = (0.5 - camera.y) * 2 * maxPanY;
             
-            // videoWrapper.style.transform = `scale(${zoom}) translate(${panX}px, ${panY}px)`;
+            videoWrapper.style.transform = `scale(${zoom}) translate(${panX}px, ${panY}px)`;
         }
         
         function resetCamera() {
