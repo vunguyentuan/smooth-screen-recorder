@@ -91,7 +91,7 @@
         
         .video-wrapper {
             position: relative;
-            transform-origin: center center;
+            transform-origin: top left;
             transition: transform 0.016s ease-out;
             box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 8px;
             border-radius: 20px;
@@ -660,9 +660,9 @@
             const size = parseInt(sizeSlider.value);
             
             // Draw safe zone boundaries for debugging (if debug is on)
-            // if (showDebug && camera.zoom > 1) {
+            if (showDebug && camera.zoom > 1) {
                 drawSafeZone();
-            // }
+            }
             
             // Draw trail
             if (trailEvents.length > 1) {
@@ -877,39 +877,60 @@
             const zoom = camera.zoom;
             
             if (zoom <= 1) {
-                videoWrapper.style.transform = `scale(${zoom}) translate(0px, 0px)`;
+                videoWrapper.style.transformOrigin = 'center center';
+                videoWrapper.style.transform = `scale(${zoom})`;
                 return;
             }
             
-            // Calculate pan to show the correct portion of the video
-            const containerWidth = video.offsetWidth;
-            const containerHeight = video.offsetHeight;
+            // Get container dimensions
+            const containerWidth = videoWrapper.offsetWidth;
+            const containerHeight = videoWrapper.offsetHeight;
             
-            // Convert normalized camera position to pixel offset
-            // Camera position (0.5, 0.5) should show center of video
-            // Camera position (0, 0) should show top-left corner
-            // Camera position (1, 1) should show bottom-right corner
+            // Calculate where we want the transform origin to be
+            // This is NOT the camera position, but rather the point that should
+            // stay fixed when zooming (and end up at the center of the viewport)
             
-            // Calculate how much to offset the video based on camera position
-            // The viewport should always stay centered on screen
-            // We move the video content, not the viewport
+            // The point we want to zoom into (camera position in container pixels)
+            const targetX = camera.x * containerWidth;
+            const targetY = camera.y * containerHeight;
             
-            // When camera is at (0.5, 0.5), no translation needed
-            // When camera moves right, we pan video left (negative)
-            // When camera moves left, we pan video right (positive)
+            // When we scale from a transform-origin, that point stays fixed
+            // We want that point to end up at the center of the container
+            // So we need to calculate what point, when scaled, will put our target at center
             
-            // Convert camera position from normalized (0-1) to pixel offset from center
-            const centerOffsetX = (camera.x - 0.5) * canvas.width/2;
-            const centerOffsetY = (camera.y - 0.5) * canvas.height/2;
+            // The formula: origin + (target - origin) * zoom = center
+            // Solving for origin: origin = (center - target * zoom) / (1 - zoom)
             
-            // Scale the offset by the ratio of container to canvas size
-            const scaleRatio = containerWidth / canvas.width;
+            const centerX = containerWidth / 2;
+            const centerY = containerHeight / 2;
             
-            // Apply the offset in the opposite direction, scaled by zoom
-            const panX = -centerOffsetX * scaleRatio * zoom;
-            const panY = -centerOffsetY * scaleRatio * zoom;
+            let originX, originY;
             
-            videoWrapper.style.transform = `scale(${zoom}) translate(${panX}px, ${panY}px)`;
+            if (zoom !== 1) {
+                originX = (centerX - targetX * zoom) / (1 - zoom);
+                originY = (centerY - targetY * zoom) / (1 - zoom);
+            } else {
+                originX = targetX;
+                originY = targetY;
+            }
+            
+            // Set transform origin and apply scale only
+            videoWrapper.style.transformOrigin = `${originX}px ${originY}px`;
+            videoWrapper.style.transform = `scale(${zoom})`;
+            
+            // Logging for debugging
+            console.log('=== applyVideoTransform Debug ===');
+            console.log('Camera:', { x: camera.x, y: camera.y, zoom: camera.zoom });
+            console.log('Container:', { width: containerWidth, height: containerHeight });
+            console.log('Target (camera in pixels):', { x: targetX, y: targetY });
+            console.log('Center:', { x: centerX, y: centerY });
+            console.log('Transform Origin:', { x: originX, y: originY });
+            console.log('Transform:', `scale(${zoom})`);
+            console.log('Verification - target after scale:', {
+                x: originX + (targetX - originX) * zoom,
+                y: originY + (targetY - originY) * zoom
+            });
+            console.log('================================');
         }
         
         function resetCamera() {
