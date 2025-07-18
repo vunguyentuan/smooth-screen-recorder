@@ -300,6 +300,11 @@
             <span id="fadeTimeValue">1.0s</span>
         </div>
         <div class="control-group">
+            <label>Hide Cursor When Still</label>
+            <input type="checkbox" id="hideCursorCheck">
+            <span>After 1s</span>
+        </div>
+        <div class="control-group">
             <label>Playback Speed</label>
             <input type="range" id="speedSlider" min="0.25" max="3" step="0.25" value="1">
         </div>
@@ -359,6 +364,7 @@
         let currentCursorIndex = 0;
         let showDebug = false;
         let trailFadeTimeout = 1000; // Trail disappears after 1 second of no movement
+        let hideCursorWhenStill = false;
         
         // Camera system variables
         let camera = {
@@ -412,6 +418,7 @@
         const trailSlider = document.getElementById('trailSlider');
         const fadeTimeSlider = document.getElementById('fadeTimeSlider');
         const fadeTimeValue = document.getElementById('fadeTimeValue');
+        const hideCursorCheck = document.getElementById('hideCursorCheck');
         const speedSlider = document.getElementById('speedSlider');
         const offsetSlider = document.getElementById('offsetSlider');
         const offsetValue = document.getElementById('offsetValue');
@@ -438,6 +445,7 @@
         speedSlider.addEventListener('input', updatePlaybackSpeed);
         offsetSlider.addEventListener('input', updateTimeOffset);
         fadeTimeSlider.addEventListener('input', updateFadeTime);
+        hideCursorCheck.addEventListener('change', updateHideCursor);
         
         // Camera control listeners
         zoomSlider.addEventListener('input', updateZoom);
@@ -716,8 +724,26 @@
                 }
             }
             
-            // Draw current cursor position (always at full opacity)
-            drawCursorPoint(currentEvent.x, currentEvent.y, currentEvent.isClick, opacity, size, true);
+            // Draw current cursor position with smooth fade in/out
+            let cursorOpacity = opacity;
+            if (hideCursorWhenStill) {
+                if (timeSinceLastEvent > 1) {
+                    // Fade out over 0.3 seconds after being still for 1 second
+                    const fadeOutStart = 1;
+                    const fadeOutDuration = 0.3;
+                    const fadeOutProgress = Math.min(1, (timeSinceLastEvent - fadeOutStart) / fadeOutDuration);
+                    cursorOpacity = opacity * (1 - fadeOutProgress);
+                } else if (timeSinceLastEvent < 0.3) {
+                    // Fade in over 0.3 seconds when cursor starts moving
+                    const fadeInProgress = Math.min(1, timeSinceLastEvent / 0.3);
+                    cursorOpacity = opacity * fadeInProgress;
+                }
+            }
+            
+            // Only draw if cursor has some opacity
+            if (cursorOpacity > 0.01) {
+                drawCursorPoint(currentEvent.x, currentEvent.y, currentEvent.isClick, cursorOpacity, size, true);
+            }
         }
         
         function drawSafeZone() {
@@ -1091,6 +1117,10 @@
         function updateFadeTime() {
             trailFadeTimeout = parseFloat(fadeTimeSlider.value) * 1000; // Convert to milliseconds
             fadeTimeValue.textContent = `${parseFloat(fadeTimeSlider.value).toFixed(1)}s`;
+        }
+        
+        function updateHideCursor() {
+            hideCursorWhenStill = hideCursorCheck.checked;
         }
         
         function onVideoEnded() {
