@@ -295,6 +295,11 @@
             <input type="range" id="trailSlider" min="0" max="100" step="5" value="20">
         </div>
         <div class="control-group">
+            <label>Trail Fade Time</label>
+            <input type="range" id="fadeTimeSlider" min="0.1" max="3" step="0.1" value="1">
+            <span id="fadeTimeValue">1.0s</span>
+        </div>
+        <div class="control-group">
             <label>Playback Speed</label>
             <input type="range" id="speedSlider" min="0.25" max="3" step="0.25" value="1">
         </div>
@@ -353,6 +358,7 @@
         let timeOffset = 0;
         let currentCursorIndex = 0;
         let showDebug = false;
+        let trailFadeTimeout = 1000; // Trail disappears after 1 second of no movement
         
         // Camera system variables
         let camera = {
@@ -404,6 +410,8 @@
         const opacitySlider = document.getElementById('opacitySlider');
         const sizeSlider = document.getElementById('sizeSlider');
         const trailSlider = document.getElementById('trailSlider');
+        const fadeTimeSlider = document.getElementById('fadeTimeSlider');
+        const fadeTimeValue = document.getElementById('fadeTimeValue');
         const speedSlider = document.getElementById('speedSlider');
         const offsetSlider = document.getElementById('offsetSlider');
         const offsetValue = document.getElementById('offsetValue');
@@ -429,6 +437,7 @@
         
         speedSlider.addEventListener('input', updatePlaybackSpeed);
         offsetSlider.addEventListener('input', updateTimeOffset);
+        fadeTimeSlider.addEventListener('input', updateFadeTime);
         
         // Camera control listeners
         zoomSlider.addEventListener('input', updateZoom);
@@ -664,36 +673,51 @@
                 drawSafeZone();
             }
             
-            // Draw trail
-            if (trailEvents.length > 1) {
-                ctx.strokeStyle = `rgba(0, 136, 255, ${opacity * 0.5})`;
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                
-                for (let i = 0; i < trailEvents.length; i++) {
-                    const event = trailEvents[i];
-                    const x = event.x * canvas.width;
-                    const y = event.y * canvas.height;
+            // Calculate time-based fade factor
+            const currentEvent = trailEvents[trailEvents.length - 1];
+            const timeSinceLastEvent = targetTime - currentEvent.time;
+            const timeFadeFactor = Math.max(0, 1 - (timeSinceLastEvent / (trailFadeTimeout / 1000)));
+            
+            // Draw trail with smooth fade effect
+            if (trailEvents.length > 1 && timeFadeFactor > 0) {
+                // Draw multiple trail segments with decreasing opacity
+                for (let i = 1; i < trailEvents.length; i++) {
+                    const progress = i / trailEvents.length;
+                    // Exponential fade-out for smoother disappearance
+                    const segmentAlpha = Math.pow(progress, 2) * opacity * 0.5 * timeFadeFactor;
                     
-                    if (i === 0) {
-                        ctx.moveTo(x, y);
-                    } else {
-                        ctx.lineTo(x, y);
+                    if (segmentAlpha > 0.01) { // Skip drawing if too faint
+                        ctx.strokeStyle = `rgba(0, 136, 255, ${segmentAlpha})`;
+                        ctx.lineWidth = 2 * progress * timeFadeFactor; // Trail gets thinner as it fades
+                        ctx.beginPath();
+                        
+                        const prevEvent = trailEvents[i - 1];
+                        const currEvent = trailEvents[i];
+                        
+                        ctx.moveTo(prevEvent.x * canvas.width, prevEvent.y * canvas.height);
+                        ctx.lineTo(currEvent.x * canvas.width, currEvent.y * canvas.height);
+                        ctx.stroke();
                     }
                 }
-                ctx.stroke();
             }
             
-            // Draw trail points with fading effect
-            for (let i = 0; i < trailEvents.length; i++) {
-                const event = trailEvents[i];
-                const alpha = (i / trailEvents.length) * opacity * 0.7;
-                drawCursorPoint(event.x, event.y, event.isClick, alpha, size * 0.7);
+            // Draw trail points with smooth fading effect
+            if (timeFadeFactor > 0) {
+                for (let i = 0; i < trailEvents.length - 1; i++) {
+                    const event = trailEvents[i];
+                    const progress = i / trailEvents.length;
+                    // Use exponential function for smooth fade-out
+                    const alpha = Math.pow(progress, 3) * opacity * 0.6 * timeFadeFactor;
+                    
+                    if (alpha > 0.01) { // Skip drawing if too faint
+                        const pointSize = size * 0.7 * progress * timeFadeFactor; // Points shrink as they fade
+                        drawCursorPoint(event.x, event.y, event.isClick, alpha, pointSize);
+                    }
+                }
             }
             
-            // Draw current cursor position
-            const currentEvent = trailEvents[trailEvents.length - 1];
-            drawCursorPoint(currentEvent.x, currentEvent.y, currentEvent.isClick, opacity, size);
+            // Draw current cursor position (always at full opacity)
+            drawCursorPoint(currentEvent.x, currentEvent.y, currentEvent.isClick, opacity, size, true);
         }
         
         function drawSafeZone() {
@@ -751,11 +775,17 @@
             }
         }
         
-        function drawCursorPoint(x, y, isClick, alpha, size) {
+        function drawCursorPoint(x, y, isClick, alpha, size, isMainCursor = false) {
             const canvasX = x * canvas.width;
             const canvasY = y * canvas.height;
             
             ctx.globalAlpha = alpha;
+            
+            // Add glow effect for main cursor
+            if (isMainCursor) {
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = isClick ? 'rgba(255, 68, 68, 0.8)' : 'rgba(0, 136, 255, 0.8)';
+            }
             
             if (isClick) {
                 ctx.fillStyle = '#ff4444';
@@ -779,6 +809,11 @@
                 ctx.beginPath();
                 ctx.arc(canvasX, canvasY, size, 0, 2 * Math.PI);
                 ctx.stroke();
+            }
+            
+            // Reset shadow
+            if (isMainCursor) {
+                ctx.shadowBlur = 0;
             }
             
             ctx.globalAlpha = 1;
@@ -1051,6 +1086,11 @@
         function updateTimeOffset() {
             timeOffset = parseFloat(offsetSlider.value);
             offsetValue.textContent = `${timeOffset.toFixed(1)}s`;
+        }
+        
+        function updateFadeTime() {
+            trailFadeTimeout = parseFloat(fadeTimeSlider.value) * 1000; // Convert to milliseconds
+            fadeTimeValue.textContent = `${parseFloat(fadeTimeSlider.value).toFixed(1)}s`;
         }
         
         function onVideoEnded() {
